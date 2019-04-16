@@ -6,11 +6,12 @@ import (
 	"log"
 	"net"
 	"sync"
+	"time"
 )
 
 type ReplicationServer struct {
 	cw          ContentWatcher
-	cwlock		sync.Mutex
+	cwlock		sync.RWMutex
 	listener    net.Listener
 	addr        string
 	stop        chan bool
@@ -41,7 +42,7 @@ func (rs ReplicationServer) Serve() {
 		hasFreeAccept := false
 		for run {
 			select {
-			case <-rs.stop: //это пока не работает
+			case <-rs.stop:
 				log.Println("Replication Server shutdown...")
 				close(rs.stop)
 				run = false
@@ -52,7 +53,6 @@ func (rs ReplicationServer) Serve() {
 						return //не надо плодить много горутин с приемом
 					}
 					*hasFreeAccept = true
-					log.Println("New Replication Accept started")
 					conn, err := rs.listener.Accept()
 					*hasFreeAccept = false
 					if err != nil {
@@ -69,8 +69,8 @@ func (rs ReplicationServer) Serve() {
 
 func (rs ReplicationServer) handleConn(conn net.Conn) {
 	defer conn.Close()
-	rs.cwlock.Lock()
-	defer rs.cwlock.Unlock()
+	rs.cwlock.RLock()
+	defer rs.cwlock.RUnlock()
 	encoder := gob.NewEncoder(conn)
 	err := encoder.Encode(rs.cw)
 	if err != nil {
@@ -90,17 +90,25 @@ func (rs ReplicationServer) GetConnections() int {
 func (rs ReplicationServer) Set (key string, val interface{}) {
 	rs.cwlock.Lock()
 	defer rs.cwlock.Unlock()
-	rs.cw.Add(key, val)
+	rs.cw.Set(key, val)
 }
 
 func (rs ReplicationServer) Unset (key string) {
 	rs.cwlock.Lock()
 	defer rs.cwlock.Unlock()
-	rs.cw.Delete(key)
+	rs.cw.Unset(key)
 }
 
 func (rs ReplicationServer) IsSet (key string) bool {
-	rs.cwlock.Lock()
-	defer rs.cwlock.Unlock()
-	return rs.cw.Has(key)
+	rs.cwlock.RLock()
+	defer rs.cwlock.RUnlock()
+	return rs.cw.IsSet(key)
+}
+
+
+func (rs ReplicationServer) GracefulStop() {
+	rs.Stop()
+	for rs.GetConnections() > 0 {
+		time.Sleep(1)
+	}
 }

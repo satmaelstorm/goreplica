@@ -19,13 +19,13 @@ func TestContentWatcher_Add(t *testing.T) {
 	item.C["1"] = true
 
 	cw := NewContentWatcher()
-	cw.Add("item", item)
+	cw.Set("item", item)
 
 	item.A = 2
 	item.B = "test3"
 	item.C["1"] = false
 
-	cw.Add("item", item)
+	cw.Set("item", item)
 
 	item2, ok := cw.Get("item")
 
@@ -39,7 +39,6 @@ func TestContentWatcher_Add(t *testing.T) {
 	if item3.A != item.A || item3.B != item.B || item3.C["1"] != item.C["1"]{
 		t.Errorf("Items is not same!")
 	}
-
 }
 
 func TestReplicationServer(t *testing.T) {
@@ -104,5 +103,4 @@ func TestReplicationServer(t *testing.T) {
 	}
 
 	rs.Stop()
-
 }

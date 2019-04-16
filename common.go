@@ -10,11 +10,11 @@ type ContentWatcher struct {
 	Vars map[string]interface{}
 }
 
-func (cw *ContentWatcher) Add (key string, val interface{}) {
+func (cw *ContentWatcher) Set(key string, val interface{}) {
 	cw.Vars[key] = val
 }
 
-func (cw *ContentWatcher) Delete (key string) {
+func (cw *ContentWatcher) Unset(key string) {
 	delete(cw.Vars, key)
 }
 
@@ -23,7 +23,7 @@ func (cw *ContentWatcher) Get (key string) (interface{}, bool) {
 	return r, ok
 }
 
-func (cw *ContentWatcher) Has (key string) bool {
+func (cw *ContentWatcher) IsSet(key string) bool {
 	_, ok := cw.Vars[key]
 	return ok
 }
