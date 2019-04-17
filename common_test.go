@@ -104,3 +104,43 @@ func TestReplicationServer(t *testing.T) {
 
 	rs.Stop()
 }
+
+func BenchmarkReplicationClient_ReplicationGet(b *testing.B) {
+	gob.Register(testStruct{})
+	var item testStruct
+	item.A = 1
+	item.B = "testing"
+	item.C = make(map[string]bool)
+	item.C["1"] = true
+	item.C["2"] = true
+	item.C["3"] = true
+	rs, err := NewReplicationServer("localhost:8086")
+	if nil == err {
+		rs.Serve()
+		rs.Set("item", item)
+	}
+
+	b.RunParallel(func (pb *testing.PB){
+		for pb.Next() {
+			rc := NewReplicationClient("localhost:8086")
+			result, err := rc.ReplicationGet()
+
+			if err != nil {
+				b.Error(err.Error())
+				return
+			}
+
+			item2, ok := result.Get("item")
+
+			if !ok {
+				b.Errorf("No item key in ContentWatcher")
+				return
+			}
+			item3 := item2.(testStruct)
+
+			if item3.A != item.A || item3.B != item.B || item3.C["1"] != item.C["1"] {
+				b.Errorf("Items is not same!")
+			}
+		}
+	})
+}
