@@ -2,6 +2,7 @@ package goreplica
 
 import (
 	"encoding/gob"
+	"sync"
 	"testing"
 )
 
@@ -105,8 +106,9 @@ func TestReplicationServer(t *testing.T) {
 	rs.Stop()
 }
 
+var o sync.Once;
+
 func BenchmarkReplicationClient_ReplicationGet(b *testing.B) {
-	gob.Register(testStruct{})
 	var item testStruct
 	item.A = 1
 	item.B = "testing"
@@ -114,11 +116,15 @@ func BenchmarkReplicationClient_ReplicationGet(b *testing.B) {
 	item.C["1"] = true
 	item.C["2"] = true
 	item.C["3"] = true
-	rs, err := NewReplicationServer("localhost:8086")
-	if nil == err {
-		rs.Serve()
-		rs.Set("item", item)
-	}
+
+	o.Do(func() {
+		gob.Register(testStruct{})
+		rs, err := NewReplicationServer("localhost:8086")
+		if nil == err {
+			rs.Serve()
+			rs.Set("item", item)
+		}
+	})
 
 	b.RunParallel(func (pb *testing.PB){
 		for pb.Next() {
