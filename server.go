@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"os"
 	"sync"
 	"time"
 )
@@ -38,24 +39,24 @@ func NewReplicationServer(addr string) (*ReplicationServer, error) {
 
 func (rs *ReplicationServer) Serve() {
 	go func(rs *ReplicationServer) {
-		log.Println("Replication Server started...")
-		run := true
-		hasFreeAccept := false
+		log.Printf("[%d] Replication Server started...", os.Getpid())
+		canAccept := make(chan bool, 1)
+		canAccept <- true
 		var mu sync.Mutex
-		for run {
+		for {
 			mu.Lock()
 			select {
 			case <-rs.stop:
 				log.Println("Replication Server shutdown...")
-				run = false
+				close(canAccept)
 				close(rs.stop)
 				rs.listener.Close()
-			default:
-				if !hasFreeAccept && run {
-					go func(hasFreeAccept *bool) {
-						*hasFreeAccept = true
+				break
+			case x:= <- canAccept:
+				if x {
+					go func(ch chan bool) {
 						conn, err := rs.listener.Accept()
-						*hasFreeAccept = false
+						ch <- true
 						if err != nil {
 							log.Println(err.Error())
 							return
@@ -64,8 +65,10 @@ func (rs *ReplicationServer) Serve() {
 						rs.connections++
 						rs.cLock.Unlock()
 						go rs.handleConn(conn)
-					}(&hasFreeAccept)
+					}(canAccept)
 				}
+			default:
+
 			}
 			mu.Unlock()
 		}
@@ -73,7 +76,12 @@ func (rs *ReplicationServer) Serve() {
 }
 
 func (rs *ReplicationServer) handleConn(conn net.Conn) {
-	defer conn.Close()
+	defer func() {
+		err := conn.Close()
+		if err != nil {
+			log.Printf("Error while colsing connection: %s", err)
+		}
+	}()
 	rs.cwlock.RLock()
 	defer rs.cwlock.RUnlock()
 	encoder := gob.NewEncoder(conn)
