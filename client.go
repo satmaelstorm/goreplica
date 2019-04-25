@@ -2,6 +2,7 @@ package goreplica
 
 import (
 	"encoding/gob"
+	"log"
 	"net"
 )
 
@@ -20,7 +21,13 @@ func (rc ReplicationClient) ReplicationGet() (ContentWatcher, error) {
 	if err != nil {
 		return ContentWatcher{}, err
 	}
-	defer conn.Close()
+	defer func() {
+		log.Println("Close connection")
+		err := conn.Close()
+		if err != nil {
+			log.Printf("Error while closing connection: %s", err)
+		}
+	}()
 
 	decoder := gob.NewDecoder(conn)
 	var cw ContentWatcher
