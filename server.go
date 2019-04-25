@@ -11,7 +11,7 @@ import (
 
 type ReplicationServer struct {
 	cw          ContentWatcher
-	cwlock		sync.RWMutex
+	cwlock      sync.RWMutex
 	listener    net.Listener
 	addr        string
 	stop        chan bool
@@ -87,28 +87,31 @@ func (rs ReplicationServer) GetConnections() int {
 	return rs.connections
 }
 
-func (rs ReplicationServer) Set (key string, val interface{}) {
+func (rs ReplicationServer) Set(key string, val interface{}) {
 	rs.cwlock.Lock()
 	defer rs.cwlock.Unlock()
 	rs.cw.Set(key, val)
 }
 
-func (rs ReplicationServer) Unset (key string) {
+func (rs ReplicationServer) Unset(key string) {
 	rs.cwlock.Lock()
 	defer rs.cwlock.Unlock()
 	rs.cw.Unset(key)
 }
 
-func (rs ReplicationServer) IsSet (key string) bool {
+func (rs ReplicationServer) IsSet(key string) bool {
 	rs.cwlock.RLock()
 	defer rs.cwlock.RUnlock()
 	return rs.cw.IsSet(key)
 }
-
 
 func (rs ReplicationServer) GracefulStop() {
 	rs.Stop()
 	for rs.GetConnections() > 0 {
 		time.Sleep(1)
 	}
+}
+
+func (rs ReplicationServer) RegisterType(value interface{}) {
+	gob.Register(value)
 }
