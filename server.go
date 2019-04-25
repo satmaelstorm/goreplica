@@ -16,6 +16,7 @@ type ReplicationServer struct {
 	addr        string
 	stop        chan bool
 	connections int
+	cLock       sync.RWMutex
 }
 
 func NewReplicationServer(addr string) (ReplicationServer, error) {
@@ -44,8 +45,8 @@ func (rs ReplicationServer) Serve() {
 			select {
 			case <-rs.stop:
 				log.Println("Replication Server shutdown...")
-				close(rs.stop)
 				run = false
+				close(rs.stop)
 				rs.listener.Close()
 			default:
 				go func(hasFreeAccept *bool, run bool) {
@@ -59,7 +60,9 @@ func (rs ReplicationServer) Serve() {
 						log.Println(err.Error())
 						return
 					}
+					rs.cLock.Lock()
 					rs.connections++
+					rs.cLock.Unlock()
 					go rs.handleConn(conn)
 				}(&hasFreeAccept, run)
 			}
@@ -76,7 +79,9 @@ func (rs ReplicationServer) handleConn(conn net.Conn) {
 	if err != nil {
 		fmt.Println(err.Error())
 	}
+	rs.cLock.Lock()
 	rs.connections--
+	rs.cLock.Unlock()
 }
 
 func (rs ReplicationServer) Stop() {
@@ -84,6 +89,8 @@ func (rs ReplicationServer) Stop() {
 }
 
 func (rs ReplicationServer) GetConnections() int {
+	rs.cLock.RLock()
+	defer rs.cLock.RUnlock()
 	return rs.connections
 }
 
