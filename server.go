@@ -41,7 +41,9 @@ func (rs *ReplicationServer) Serve() {
 		log.Println("Replication Server started...")
 		run := true
 		hasFreeAccept := false
+		var mu sync.Mutex
 		for run {
+			mu.Lock()
 			select {
 			case <-rs.stop:
 				log.Println("Replication Server shutdown...")
@@ -49,23 +51,23 @@ func (rs *ReplicationServer) Serve() {
 				close(rs.stop)
 				rs.listener.Close()
 			default:
-				go func(hasFreeAccept *bool, run bool) {
-					if *hasFreeAccept || !run {
-						return //не надо плодить много горутин с приемом
-					}
-					*hasFreeAccept = true
-					conn, err := rs.listener.Accept()
-					*hasFreeAccept = false
-					if err != nil {
-						log.Println(err.Error())
-						return
-					}
-					rs.cLock.Lock()
-					rs.connections++
-					rs.cLock.Unlock()
-					go rs.handleConn(conn)
-				}(&hasFreeAccept, run)
+				if !hasFreeAccept && run {
+					go func(hasFreeAccept *bool) {
+						*hasFreeAccept = true
+						conn, err := rs.listener.Accept()
+						*hasFreeAccept = false
+						if err != nil {
+							log.Println(err.Error())
+							return
+						}
+						rs.cLock.Lock()
+						rs.connections++
+						rs.cLock.Unlock()
+						go rs.handleConn(conn)
+					}(&hasFreeAccept)
+				}
 			}
+			mu.Unlock()
 		}
 	}(rs)
 }
