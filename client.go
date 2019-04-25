@@ -21,8 +21,8 @@ func (rc ReplicationClient) ReplicationGet() (ContentWatcher, error) {
 	if err != nil {
 		return ContentWatcher{}, err
 	}
+
 	defer func() {
-		log.Println("Close connection")
 		err := conn.Close()
 		if err != nil {
 			log.Printf("Error while closing connection: %s", err)
