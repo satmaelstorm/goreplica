@@ -52,8 +52,8 @@ func (rs *ReplicationServer) Serve() {
 				rs.listener.Close()
 			default:
 				if !hasFreeAccept && run {
+					hasFreeAccept = true
 					go func(hasFreeAccept *bool) {
-						*hasFreeAccept = true
 						conn, err := rs.listener.Accept()
 						*hasFreeAccept = false
 						if err != nil {
