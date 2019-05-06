@@ -2,6 +2,8 @@ package goreplica
 
 import "encoding/gob"
 
+const READ_ALL = "__(all_keys)__"
+
 func init() {
 	gob.Register(ContentWatcher{})
 }

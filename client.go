@@ -17,6 +17,13 @@ func NewReplicationClient(addr string) ReplicationClient {
 }
 
 func (rc ReplicationClient) ReplicationGet() (ContentWatcher, error) {
+	var keys []string
+	keys = append(keys, READ_ALL)
+
+	return rc.ReplicationGetKeys(keys)
+}
+
+func (rc ReplicationClient) ReplicationGetKeys(keys []string) (ContentWatcher, error) {
 	conn, err := net.Dial("tcp", rc.addr)
 	if err != nil {
 		return ContentWatcher{}, err
@@ -25,9 +32,16 @@ func (rc ReplicationClient) ReplicationGet() (ContentWatcher, error) {
 	defer func() {
 		err := conn.Close()
 		if err != nil {
-			log.Printf("Error while closing connection: %s", err)
+			log.Printf("Error while closing connection: %s\n", err)
 		}
 	}()
+
+	encoder := gob.NewEncoder(conn)
+	err = encoder.Encode(keys)
+
+	if err != nil {
+		log.Printf("Error while send command to server: %s\n", err)
+	}
 
 	decoder := gob.NewDecoder(conn)
 	var cw ContentWatcher

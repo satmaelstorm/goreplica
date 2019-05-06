@@ -42,6 +42,73 @@ func TestContentWatcher_Add(t *testing.T) {
 	}
 }
 
+func TestReplicationClientOneKey(t *testing.T) {
+	rs, err := NewReplicationServer("localhost:8086")
+	if err != nil {
+		t.Error(err.Error())
+		return
+	}
+	rs.Serve()
+
+	rs.Set("int", 1)
+	rs.Set("str", "string")
+	rs.Set("bool", true)
+
+	rc := NewReplicationClient("localhost:8086")
+
+	result, _ := rc.ReplicationGet()
+
+	i, ok := result.Get("int")
+	if !ok {
+		t.Errorf("No item with key \"int\" in ContentWatcher")
+	} else if i.(int) != 1 {
+		t.Errorf("Items is not same!")
+	}
+
+	i, ok = result.Get("str")
+	if !ok {
+		t.Errorf("No item with key \"str\" in ContentWatcher")
+	} else if i.(string) != "string" {
+		t.Errorf("Items is not same!")
+	}
+
+	i, ok = result.Get("bool")
+	if !ok {
+		t.Errorf("No item with key \"bool\" in ContentWatcher")
+	} else if i.(bool) != true {
+		t.Errorf("Items is not same!")
+	}
+
+	var keys []string
+	keys = append(keys, "int")
+	keys = append(keys, "bool")
+
+	rs.Set("int", 2)
+
+	result, _ = rc.ReplicationGetKeys(keys)
+
+	i, ok = result.Get("int")
+	if !ok {
+		t.Errorf("No item with key \"int\" in ContentWatcher")
+	} else if i.(int) !=2 {
+		t.Errorf("Items is not same!")
+	}
+
+	i, ok = result.Get("str")
+	if ok {
+		t.Errorf("Item with key \"str\" in ContentWatcher!")
+	}
+
+	i, ok = result.Get("bool")
+	if !ok {
+		t.Errorf("No item with key \"bool\" in ContentWatcher")
+	} else if i.(bool) != true {
+		t.Errorf("Items is not same!")
+	}
+	rs.GracefulStop()
+}
+
+
 func TestReplicationServer(t *testing.T) {
 	gob.Register(testStruct{})
 	rs, err := NewReplicationServer("localhost:8086")

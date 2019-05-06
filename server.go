@@ -2,7 +2,6 @@ package goreplica
 
 import (
 	"encoding/gob"
-	"fmt"
 	"log"
 	"net"
 	"sync"
@@ -63,6 +62,11 @@ func (rs *ReplicationServer) Serve() {
 						rs.cLock.Lock()
 						rs.connections++
 						rs.cLock.Unlock()
+						err = conn.SetReadDeadline(time.Now().Add(time.Duration(3 * time.Second)))
+						if err != nil {
+							log.Println(err.Error())
+							return
+						}
 						go rs.handleConn(conn)
 					}(&hasFreeAccept)
 				}
@@ -73,17 +77,46 @@ func (rs *ReplicationServer) Serve() {
 }
 
 func (rs *ReplicationServer) handleConn(conn net.Conn) {
+	defer func() {
+		rs.cLock.Lock()
+		rs.connections--
+		rs.cLock.Unlock()
+	}()
+
 	defer conn.Close()
 	rs.cwlock.RLock()
 	defer rs.cwlock.RUnlock()
-	encoder := gob.NewEncoder(conn)
-	err := encoder.Encode(rs.cw)
+	var keys []string
+
+	decoder := gob.NewDecoder(conn)
+	err := decoder.Decode(&keys)
 	if err != nil {
-		fmt.Println(err.Error())
+		log.Printf("Error while read command: %s\n", err)
+		return
 	}
-	rs.cLock.Lock()
-	rs.connections--
-	rs.cLock.Unlock()
+
+	encoder := gob.NewEncoder(conn)
+	if len(keys) == 1 && READ_ALL == keys[0]{
+		err := encoder.Encode(rs.cw)
+		if err != nil {
+			log.Println(err.Error())
+		}
+		return
+	}
+
+	ncw := NewContentWatcher()
+
+	for _, key := range keys {
+		if rs.cw.IsSet(key) {
+			v, _ := rs.cw.Get(key)
+			ncw.Set(key, v)
+		}
+	}
+
+	err = encoder.Encode(ncw)
+	if err != nil {
+		log.Println(err.Error())
+	}
 }
 
 func (rs *ReplicationServer) Stop() {
