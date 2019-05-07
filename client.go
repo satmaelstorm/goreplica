@@ -4,11 +4,13 @@ import (
 	"encoding/gob"
 	"log"
 	"net"
+	"sync"
 )
 
 type ReplicationClient struct {
-	addr string
-	keys map[string]bool
+	addr  string
+	keys  map[string]bool
+	kLock sync.RWMutex
 }
 
 func NewReplicationClient(addr string) *ReplicationClient {
@@ -18,31 +20,47 @@ func NewReplicationClient(addr string) *ReplicationClient {
 	return &rc
 }
 
-func (rc *ReplicationClient) DropAllKeys() {
+func (rc *ReplicationClient) dropAllKeys() {
 	rc.keys = make(map[string]bool)
 }
 
+func (rc *ReplicationClient) DropAllKeys() {
+	rc.kLock.Lock()
+	defer rc.kLock.Unlock()
+	rc.dropAllKeys()
+}
+
 func (rc *ReplicationClient) SetKeys(k []string) {
-	rc.DropAllKeys()
+	rc.kLock.Lock()
+	defer rc.kLock.Unlock()
+	rc.dropAllKeys()
 	for _, key := range k {
 		rc.keys[key] = true
 	}
 }
 
 func (rc *ReplicationClient) AddKey(k string) {
+	rc.kLock.Lock()
+	defer rc.kLock.Unlock()
 	rc.keys[k] = true
 }
 
 func (rc *ReplicationClient) DeleteKey(k string) {
+	rc.kLock.Lock()
+	defer rc.kLock.Unlock()
 	delete(rc.keys, k)
 }
 
 func (rc *ReplicationClient) HasKey(k string) bool {
+	rc.kLock.RLock()
+	defer rc.kLock.RUnlock()
 	_, ok := rc.keys[k]
 	return ok
 }
 
 func (rc *ReplicationClient) GetKeys() []string {
+	rc.kLock.RLock()
+	defer rc.kLock.RUnlock()
 	k := make([]string, len(rc.keys))
 	i := 0
 	for key, _ := range rc.keys {
