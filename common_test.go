@@ -173,6 +173,60 @@ func TestReplicationServer(t *testing.T) {
 	rs.GracefulStop()
 }
 
+func TestReplicationServerSetHook(t *testing.T) {
+	rs, err := NewReplicationServer("localhost:8086")
+	if err != nil {
+		t.Error(err.Error())
+		return
+	}
+	rs.Serve()
+
+	rs.Set("int", 100, 1)
+	rs.Set("str", 100, "string")
+	rs.Set("bool", 100, true)
+
+	rc := NewReplicationClient("localhost:8086")
+
+	rc.AddKey("int", 101)
+	rc.AddKey("bool", 99)
+
+	cw, err := rc.ReplicationGetKeys()
+
+	if err != nil {
+		t.Errorf("Error: %s\n", err)
+	} else {
+		_, ok := cw.Get("int")
+		b, okb := cw.Get("bool")
+		if ok {
+			t.Error("Key \"int\" is loaded")
+		} else if !okb {
+			t.Error("Key \"bool\" is not loaded")
+		} else if b.(bool) != true {
+			t.Error("Key \"bool\" is not true")
+		}
+	}
+	rs.Set("hook", 100, 4)
+	rs.SetHook("hook", func(s string, i int64, ci ContentItem) ContentItem {
+		return ContentItem{Val:42, Version:i+1}
+	})
+	rc.AddKey("hook", 100)
+
+	cw, err = rc.ReplicationGetKeys()
+	if err != nil {
+		t.Errorf("Error: %s\n", err)
+	} else if !cw.IsSet("hook"){
+		t.Errorf("Key \"hook\" is not loaded (%v)", cw)
+	} else {
+		val, _ := cw.Get("hook")
+		ver, _ := cw.GetVersion("hook")
+		if val.(int) != 42 || ver != 101 {
+			t.Errorf("Key \"hook\" is invalid val: %v, ver: %d", val, ver)
+		}
+	}
+
+	rs.GracefulStop()
+}
+
 func TestReplicationClientByKeys(t *testing.T) {
 	rs, err := NewReplicationServer("localhost:8086")
 	if err != nil {

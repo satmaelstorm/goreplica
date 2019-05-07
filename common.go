@@ -9,16 +9,16 @@ func init() {
 }
 
 type ContentWatcher struct {
-	Vars map[string]contentItem
+	Vars map[string]ContentItem
 }
 
-type contentItem struct {
+type ContentItem struct {
 	Val     interface{}
 	Version int64
 }
 
 func (cw *ContentWatcher) Set(key string, version int64, val interface{}) {
-	cw.Vars[key] = contentItem{Val: val, Version: version}
+	cw.Vars[key] = ContentItem{Val: val, Version: version}
 }
 
 func (cw *ContentWatcher) Unset(key string) {
@@ -48,6 +48,6 @@ func (cw *ContentWatcher) IsSet(key string) bool {
 
 func NewContentWatcher() ContentWatcher {
 	var cw ContentWatcher
-	cw.Vars = make(map[string]contentItem)
+	cw.Vars = make(map[string]ContentItem)
 	return cw
 }

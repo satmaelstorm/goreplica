@@ -9,8 +9,11 @@ import (
 	"time"
 )
 
+type ReplicationHook func (string, int64, ContentItem) ContentItem
+
 type ReplicationServer struct {
 	cw           ContentWatcher
+	cwHooks      map[string]ReplicationHook
 	cwlock       sync.RWMutex
 	listener     net.Listener
 	addr         string
@@ -34,6 +37,7 @@ func NewReplicationServer(addr string) (*ReplicationServer, error) {
 	server.stop = make(chan bool)
 	server.connections = 0
 	server.stopComplete.Store(false)
+	server.cwHooks = make(map[string]ReplicationHook)
 
 	return &server, nil
 }
@@ -113,10 +117,18 @@ func (rs *ReplicationServer) handleConn(conn net.Conn) {
 
 	for key, version := range keys {
 		if rs.cw.IsSet(key) {
-			v, _ := rs.cw.Get(key)
-			ver, _ := rs.cw.GetVersion(key)
-			if ver >= version {
-				ncw.Set(key, ver, v)
+			hook, ok := rs.cwHooks[key]
+			if ok {
+				ci := hook(key, version, rs.cw.Vars[key])
+				if ci.Version > version || 0 == version {
+					ncw.Vars[key] = ci
+				}
+			} else {
+				v, _ := rs.cw.Get(key)
+				ver, _ := rs.cw.GetVersion(key)
+				if ver > version || 0 == version {
+					ncw.Set(key, ver, v)
+				}
 			}
 		}
 	}
@@ -143,16 +155,35 @@ func (rs *ReplicationServer) Set(key string, version int64, val interface{}) {
 	rs.cw.Set(key, version, val)
 }
 
+func (rs *ReplicationServer) SetHook(key string, hook ReplicationHook) {
+	rs.cwlock.Lock()
+	defer rs.cwlock.Unlock()
+	rs.cwHooks[key] = hook
+}
+
 func (rs *ReplicationServer) Unset(key string) {
 	rs.cwlock.Lock()
 	defer rs.cwlock.Unlock()
 	rs.cw.Unset(key)
 }
 
-func (rs ReplicationServer) IsSet(key string) bool {
+func (rs *ReplicationServer) UnsetHook(key string) {
+	rs.cwlock.Lock()
+	defer rs.cwlock.Unlock()
+	delete(rs.cwHooks, key)
+}
+
+func (rs *ReplicationServer) IsSet(key string) bool {
 	rs.cwlock.RLock()
 	defer rs.cwlock.RUnlock()
 	return rs.cw.IsSet(key)
+}
+
+func (rs *ReplicationServer) IsSetHook(key string) bool {
+	rs.cwlock.RLock()
+	defer rs.cwlock.RUnlock()
+	_, ok := rs.cwHooks[key]
+	return ok
 }
 
 func (rs *ReplicationServer) GracefulStop() {
