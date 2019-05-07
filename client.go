@@ -8,22 +8,61 @@ import (
 
 type ReplicationClient struct {
 	addr string
+	keys map[string]bool
 }
 
-func NewReplicationClient(addr string) ReplicationClient {
+func NewReplicationClient(addr string) *ReplicationClient {
 	var rc ReplicationClient
 	rc.addr = addr
-	return rc
+	rc.keys = make(map[string]bool)
+	return &rc
 }
 
-func (rc ReplicationClient) ReplicationGet() (ContentWatcher, error) {
+func (rc *ReplicationClient) SetKeys(k []string) {
+	for _, key := range k {
+		rc.keys[key] = true
+	}
+}
+
+func (rc *ReplicationClient) AddKey(k string) {
+	rc.keys[k] = true
+}
+
+func (rc *ReplicationClient) DeleteKey(k string) {
+	delete(rc.keys, k)
+}
+
+func (rc *ReplicationClient) HasKey(k string) bool {
+	_, ok := rc.keys[k]
+	return ok
+}
+
+func (rc *ReplicationClient) GetKeys() []string {
+	k := make([]string, len(rc.keys))
+	i := 0
+	for key, _ := range rc.keys {
+		k[i] = key
+		i++
+	}
+	return k
+}
+
+func (rc *ReplicationClient) ReplicationGetAll() (ContentWatcher, error) {
 	var keys []string
 	keys = append(keys, READ_ALL)
 
-	return rc.ReplicationGetKeys(keys)
+	return rc.replicationGetKeys(keys)
 }
 
-func (rc ReplicationClient) ReplicationGetKeys(keys []string) (ContentWatcher, error) {
+func (rc *ReplicationClient) ReplicationGetKeys() (ContentWatcher, error) {
+	keys := rc.GetKeys()
+	if len(keys) < 1 {
+		return rc.ReplicationGetAll()
+	}
+	return rc.replicationGetKeys(keys)
+}
+
+func (rc *ReplicationClient) replicationGetKeys(keys []string) (ContentWatcher, error) {
 	conn, err := net.Dial("tcp", rc.addr)
 	if err != nil {
 		return ContentWatcher{}, err

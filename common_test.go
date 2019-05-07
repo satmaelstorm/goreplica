@@ -56,7 +56,7 @@ func TestReplicationClientOneKey(t *testing.T) {
 
 	rc := NewReplicationClient("localhost:8086")
 
-	result, _ := rc.ReplicationGet()
+	result, _ := rc.ReplicationGetAll()
 
 	i, ok := result.Get("int")
 	if !ok {
@@ -85,7 +85,7 @@ func TestReplicationClientOneKey(t *testing.T) {
 
 	rs.Set("int", 2)
 
-	result, _ = rc.ReplicationGetKeys(keys)
+	result, _ = rc.replicationGetKeys(keys)
 
 	i, ok = result.Get("int")
 	if !ok {
@@ -105,6 +105,7 @@ func TestReplicationClientOneKey(t *testing.T) {
 	} else if i.(bool) != true {
 		t.Errorf("Items is not same!")
 	}
+
 	rs.GracefulStop()
 }
 
@@ -128,7 +129,7 @@ func TestReplicationServer(t *testing.T) {
 
 	rc := NewReplicationClient("localhost:8086")
 
-	result, err := rc.ReplicationGet()
+	result, err := rc.ReplicationGetAll()
 
 	if err != nil {
 		rs.Stop()
@@ -154,7 +155,7 @@ func TestReplicationServer(t *testing.T) {
 
 	rs.Set("item", item)
 
-	result, err = rc.ReplicationGet()
+	result, err = rc.ReplicationGetAll()
 
 	if err != nil {
 		rs.Stop()
@@ -170,7 +171,7 @@ func TestReplicationServer(t *testing.T) {
 		t.Errorf("Items is not same!")
 	}
 
-	rs.Stop()
+	rs.GracefulStop()
 }
 
 var o sync.Once;
@@ -196,7 +197,7 @@ func BenchmarkReplicationClient_ReplicationGet(b *testing.B) {
 	b.RunParallel(func (pb *testing.PB){
 		for pb.Next() {
 			rc := NewReplicationClient("localhost:8086")
-			result, err := rc.ReplicationGet()
+			result, err := rc.ReplicationGetAll()
 
 			if err != nil {
 				b.Error(err.Error())
