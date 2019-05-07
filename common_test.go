@@ -79,9 +79,9 @@ func TestReplicationClientOneKey(t *testing.T) {
 		t.Errorf("Items is not same!")
 	}
 
-	var keys []string
-	keys = append(keys, "int")
-	keys = append(keys, "bool")
+	keys := make(map[string]int64)
+	keys["int"] = 0
+	keys["bool"] = 0
 
 	rs.Set("int", 1, 2)
 
@@ -187,7 +187,7 @@ func TestReplicationClientByKeys(t *testing.T) {
 
 	rc := NewReplicationClient("localhost:8086")
 
-	rc.AddKey("int")
+	rc.AddKey("int", 0)
 	cw, err := rc.ReplicationGetKeys()
 
 	if err != nil {
@@ -202,7 +202,7 @@ func TestReplicationClientByKeys(t *testing.T) {
 	}
 
 	rc.DeleteKey("int")
-	rc.AddKey("bool")
+	rc.AddKey("bool", 0)
 
 	cw, err = rc.ReplicationGetKeys()
 
@@ -220,7 +220,7 @@ func TestReplicationClientByKeys(t *testing.T) {
 		}
 	}
 
-	var keys []string
+	keys := make(map[string]int64)
 	rc.SetKeys(keys)
 
 	rs.Set("int", 1, 10)

@@ -30,19 +30,19 @@ func (rc *ReplicationClient) DropAllKeys() {
 	rc.dropAllKeys()
 }
 
-func (rc *ReplicationClient) SetKeys(k []string) {
+func (rc *ReplicationClient) SetKeys(k map[string]int64) {
 	rc.kLock.Lock()
 	defer rc.kLock.Unlock()
 	rc.dropAllKeys()
-	for _, key := range k {
-		rc.keys[key] = 0
+	for key, ver := range k {
+		rc.keys[key] = ver
 	}
 }
 
-func (rc *ReplicationClient) AddKey(k string) {
+func (rc *ReplicationClient) AddKey(k string, version int64) {
 	rc.kLock.Lock()
 	defer rc.kLock.Unlock()
-	rc.keys[k] = 0
+	rc.keys[k] = version
 }
 
 func (rc *ReplicationClient) DeleteKey(k string) {
@@ -58,21 +58,19 @@ func (rc *ReplicationClient) HasKey(k string) bool {
 	return ok
 }
 
-func (rc *ReplicationClient) GetKeys() []string {
+func (rc *ReplicationClient) GetKeys() map[string]int64 {
 	rc.kLock.RLock()
 	defer rc.kLock.RUnlock()
-	k := make([]string, len(rc.keys))
-	i := 0
-	for key, _ := range rc.keys {
-		k[i] = key
-		i++
+	k := make(map[string]int64)
+	for key, val := range rc.keys {
+		k[key] = val
 	}
 	return k
 }
 
 func (rc *ReplicationClient) ReplicationGetAll() (ContentWatcher, error) {
-	var keys []string
-	keys = append(keys, READ_ALL)
+	keys := make(map[string]int64)
+	keys[READ_ALL] = 0
 
 	return rc.replicationGetKeys(keys)
 }
@@ -85,7 +83,7 @@ func (rc *ReplicationClient) ReplicationGetKeys() (ContentWatcher, error) {
 	return rc.replicationGetKeys(keys)
 }
 
-func (rc *ReplicationClient) replicationGetKeys(keys []string) (ContentWatcher, error) {
+func (rc *ReplicationClient) replicationGetKeys(keys map[string]int64) (ContentWatcher, error) {
 	conn, err := net.Dial("tcp", rc.addr)
 	if err != nil {
 		return ContentWatcher{}, err

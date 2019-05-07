@@ -90,7 +90,7 @@ func (rs *ReplicationServer) handleConn(conn net.Conn) {
 	defer conn.Close()
 	rs.cwlock.RLock()
 	defer rs.cwlock.RUnlock()
-	var keys []string
+	keys := make(map[string]int64)
 
 	decoder := gob.NewDecoder(conn)
 	err := decoder.Decode(&keys)
@@ -100,7 +100,8 @@ func (rs *ReplicationServer) handleConn(conn net.Conn) {
 	}
 
 	encoder := gob.NewEncoder(conn)
-	if len(keys) == 1 && READ_ALL == keys[0] {
+	_, ok := keys[READ_ALL]
+	if len(keys) == 1 && ok {
 		err := encoder.Encode(rs.cw)
 		if err != nil {
 			log.Println(err.Error())
@@ -110,11 +111,13 @@ func (rs *ReplicationServer) handleConn(conn net.Conn) {
 
 	ncw := NewContentWatcher()
 
-	for _, key := range keys {
+	for key, version := range keys {
 		if rs.cw.IsSet(key) {
 			v, _ := rs.cw.Get(key)
 			ver, _ := rs.cw.GetVersion(key)
-			ncw.Set(key, ver, v)
+			if ver >= version {
+				ncw.Set(key, ver, v)
+			}
 		}
 	}
 
