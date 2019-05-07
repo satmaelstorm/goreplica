@@ -174,6 +174,78 @@ func TestReplicationServer(t *testing.T) {
 	rs.GracefulStop()
 }
 
+func TestReplicationClientByKeys(t *testing.T) {
+	rs, err := NewReplicationServer("localhost:8086")
+	if err != nil {
+		t.Error(err.Error())
+		return
+	}
+	rs.Serve()
+
+	rs.Set("int", 1)
+	rs.Set("str", "string")
+	rs.Set("bool", true)
+
+	rc := NewReplicationClient("localhost:8086")
+
+	rc.AddKey("int")
+	cw, err := rc.ReplicationGetKeys()
+
+	if err != nil {
+		t.Errorf("Error: %s\n", err)
+	} else {
+		i, ok := cw.Get("int")
+		if !ok {
+			t.Error("Key \"int\" is not loaded")
+		} else if i.(int) != 1 {
+			t.Error("Key \"int\" is not 1")
+		}
+	}
+
+	rc.DeleteKey("int")
+	rc.AddKey("bool")
+
+	cw, err = rc.ReplicationGetKeys()
+
+	if err != nil {
+		t.Errorf("Error: %s\n", err)
+	} else {
+		_, ok := cw.Get("int")
+		b, okb := cw.Get("bool")
+		if ok {
+			t.Error("Key \"int\" is loaded")
+		} else if !okb {
+			t.Error("Key \"bool\" is not loaded")
+		} else if b.(bool) != true {
+			t.Error("Key \"bool\" is not true")
+		}
+	}
+
+	var keys []string
+	rc.SetKeys(keys)
+
+	rs.Set("int", 10)
+	rs.Set("str", "rdw")
+	rs.Set("bool", false)
+
+	cw, err = rc.ReplicationGetKeys()
+
+	if err != nil {
+		t.Errorf("Error: %s\n", err)
+	} else {
+		i, oki := cw.Get("int")
+		b, okb := cw.Get("bool")
+		s, oks := cw.Get("str")
+		if !oki || !okb || !oks {
+			t.Errorf("Some keys is not loaded! (%v %v %v)\n", oki, okb, oks)
+		} else if i.(int) != 10 || b.(bool) != false || s.(string) != "rdw" {
+			t.Errorf("Some values is wrong! (%d %v %s)\n", i.(int), b.(bool), s.(string))
+		}
+	}
+
+	rs.GracefulStop()
+}
+
 var o sync.Once;
 
 func BenchmarkReplicationClient_ReplicationGet(b *testing.B) {

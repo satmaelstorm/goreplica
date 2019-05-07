@@ -18,7 +18,12 @@ func NewReplicationClient(addr string) *ReplicationClient {
 	return &rc
 }
 
+func (rc *ReplicationClient) DropAllKeys() {
+	rc.keys = make(map[string]bool)
+}
+
 func (rc *ReplicationClient) SetKeys(k []string) {
+	rc.DropAllKeys()
 	for _, key := range k {
 		rc.keys[key] = true
 	}

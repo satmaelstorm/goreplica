@@ -5,17 +5,19 @@ import (
 	"log"
 	"net"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
 type ReplicationServer struct {
-	cw          ContentWatcher
-	cwlock      sync.RWMutex
-	listener    net.Listener
-	addr        string
-	stop        chan bool
-	connections int
-	cLock       sync.RWMutex
+	cw           ContentWatcher
+	cwlock       sync.RWMutex
+	listener     net.Listener
+	addr         string
+	stop         chan bool
+	connections  int
+	cLock        sync.RWMutex
+	stopComplete atomic.Value
 }
 
 func NewReplicationServer(addr string) (*ReplicationServer, error) {
@@ -31,6 +33,7 @@ func NewReplicationServer(addr string) (*ReplicationServer, error) {
 	server.addr = addr
 	server.stop = make(chan bool)
 	server.connections = 0
+	server.stopComplete.Store(false)
 
 	return &server, nil
 }
@@ -45,10 +48,11 @@ func (rs *ReplicationServer) Serve() {
 			mu.Lock()
 			select {
 			case <-rs.stop:
-				log.Println("Replication Server shutdown...")
 				run = false
 				close(rs.stop)
 				rs.listener.Close()
+				rs.stopComplete.Store(true)
+				log.Println("Replication Server shutdown...")
 			default:
 				if !hasFreeAccept && run {
 					hasFreeAccept = true
@@ -96,7 +100,7 @@ func (rs *ReplicationServer) handleConn(conn net.Conn) {
 	}
 
 	encoder := gob.NewEncoder(conn)
-	if len(keys) == 1 && READ_ALL == keys[0]{
+	if len(keys) == 1 && READ_ALL == keys[0] {
 		err := encoder.Encode(rs.cw)
 		if err != nil {
 			log.Println(err.Error())
@@ -149,6 +153,9 @@ func (rs ReplicationServer) IsSet(key string) bool {
 
 func (rs *ReplicationServer) GracefulStop() {
 	rs.Stop()
+	for !rs.stopComplete.Load().(bool) {
+		time.Sleep(1)
+	}
 	for rs.GetConnections() > 0 {
 		time.Sleep(1)
 	}
