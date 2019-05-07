@@ -20,13 +20,13 @@ func TestContentWatcher_Add(t *testing.T) {
 	item.C["1"] = true
 
 	cw := NewContentWatcher()
-	cw.Set("item", item)
+	cw.Set("item", 0, item)
 
 	item.A = 2
 	item.B = "test3"
 	item.C["1"] = false
 
-	cw.Set("item", item)
+	cw.Set("item", 0, item)
 
 	item2, ok := cw.Get("item")
 
@@ -35,9 +35,9 @@ func TestContentWatcher_Add(t *testing.T) {
 		return
 	}
 
-    item3 := item2.(testStruct)
+	item3 := item2.(testStruct)
 
-	if item3.A != item.A || item3.B != item.B || item3.C["1"] != item.C["1"]{
+	if item3.A != item.A || item3.B != item.B || item3.C["1"] != item.C["1"] {
 		t.Errorf("Items is not same!")
 	}
 }
@@ -50,9 +50,9 @@ func TestReplicationClientOneKey(t *testing.T) {
 	}
 	rs.Serve()
 
-	rs.Set("int", 1)
-	rs.Set("str", "string")
-	rs.Set("bool", true)
+	rs.Set("int", 0, 1)
+	rs.Set("str", 0, "string")
+	rs.Set("bool", 0, true)
 
 	rc := NewReplicationClient("localhost:8086")
 
@@ -83,14 +83,14 @@ func TestReplicationClientOneKey(t *testing.T) {
 	keys = append(keys, "int")
 	keys = append(keys, "bool")
 
-	rs.Set("int", 2)
+	rs.Set("int", 1, 2)
 
 	result, _ = rc.replicationGetKeys(keys)
 
 	i, ok = result.Get("int")
 	if !ok {
 		t.Errorf("No item with key \"int\" in ContentWatcher")
-	} else if i.(int) !=2 {
+	} else if i.(int) != 2 {
 		t.Errorf("Items is not same!")
 	}
 
@@ -109,7 +109,6 @@ func TestReplicationClientOneKey(t *testing.T) {
 	rs.GracefulStop()
 }
 
-
 func TestReplicationServer(t *testing.T) {
 	gob.Register(testStruct{})
 	rs, err := NewReplicationServer("localhost:8086")
@@ -125,7 +124,7 @@ func TestReplicationServer(t *testing.T) {
 	item.C = make(map[string]bool)
 	item.C["1"] = true
 
-	rs.Set("item", item)
+	rs.Set("item", 0, item)
 
 	rc := NewReplicationClient("localhost:8086")
 
@@ -145,7 +144,7 @@ func TestReplicationServer(t *testing.T) {
 	}
 	item3 := item2.(testStruct)
 
-	if item3.A != item.A || item3.B != item.B || item3.C["1"] != item.C["1"]{
+	if item3.A != item.A || item3.B != item.B || item3.C["1"] != item.C["1"] {
 		t.Errorf("Items is not same!")
 	}
 
@@ -153,7 +152,7 @@ func TestReplicationServer(t *testing.T) {
 	item.B = "test2"
 	item.C["1"] = false
 
-	rs.Set("item", item)
+	rs.Set("item", 1, item)
 
 	result, err = rc.ReplicationGetAll()
 
@@ -167,7 +166,7 @@ func TestReplicationServer(t *testing.T) {
 
 	item5 := item4.(testStruct)
 
-	if item5.A != item.A || item5.B != item.B || item5.C["1"] != item.C["1"]{
+	if item5.A != item.A || item5.B != item.B || item5.C["1"] != item.C["1"] {
 		t.Errorf("Items is not same!")
 	}
 
@@ -182,9 +181,9 @@ func TestReplicationClientByKeys(t *testing.T) {
 	}
 	rs.Serve()
 
-	rs.Set("int", 1)
-	rs.Set("str", "string")
-	rs.Set("bool", true)
+	rs.Set("int", 0, 1)
+	rs.Set("str", 0, "string")
+	rs.Set("bool", 0, true)
 
 	rc := NewReplicationClient("localhost:8086")
 
@@ -224,9 +223,9 @@ func TestReplicationClientByKeys(t *testing.T) {
 	var keys []string
 	rc.SetKeys(keys)
 
-	rs.Set("int", 10)
-	rs.Set("str", "rdw")
-	rs.Set("bool", false)
+	rs.Set("int", 1, 10)
+	rs.Set("str", 1, "rdw")
+	rs.Set("bool", 1, false)
 
 	cw, err = rc.ReplicationGetKeys()
 
@@ -246,7 +245,7 @@ func TestReplicationClientByKeys(t *testing.T) {
 	rs.GracefulStop()
 }
 
-var o sync.Once;
+var o sync.Once
 
 func BenchmarkReplicationClient_ReplicationGet(b *testing.B) {
 	var item testStruct
@@ -262,11 +261,11 @@ func BenchmarkReplicationClient_ReplicationGet(b *testing.B) {
 		rs, err := NewReplicationServer("localhost:8086")
 		if nil == err {
 			rs.Serve()
-			rs.Set("item", item)
+			rs.Set("item", 0, item)
 		}
 	})
 
-	b.RunParallel(func (pb *testing.PB){
+	b.RunParallel(func(pb *testing.PB) {
 		for pb.Next() {
 			rc := NewReplicationClient("localhost:8086")
 			result, err := rc.ReplicationGetAll()

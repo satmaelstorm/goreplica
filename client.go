@@ -9,19 +9,19 @@ import (
 
 type ReplicationClient struct {
 	addr  string
-	keys  map[string]bool
+	keys  map[string]int64
 	kLock sync.RWMutex
 }
 
 func NewReplicationClient(addr string) *ReplicationClient {
 	var rc ReplicationClient
 	rc.addr = addr
-	rc.keys = make(map[string]bool)
+	rc.keys = make(map[string]int64)
 	return &rc
 }
 
 func (rc *ReplicationClient) dropAllKeys() {
-	rc.keys = make(map[string]bool)
+	rc.keys = make(map[string]int64)
 }
 
 func (rc *ReplicationClient) DropAllKeys() {
@@ -35,14 +35,14 @@ func (rc *ReplicationClient) SetKeys(k []string) {
 	defer rc.kLock.Unlock()
 	rc.dropAllKeys()
 	for _, key := range k {
-		rc.keys[key] = true
+		rc.keys[key] = 0
 	}
 }
 
 func (rc *ReplicationClient) AddKey(k string) {
 	rc.kLock.Lock()
 	defer rc.kLock.Unlock()
-	rc.keys[k] = true
+	rc.keys[k] = 0
 }
 
 func (rc *ReplicationClient) DeleteKey(k string) {

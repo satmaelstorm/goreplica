@@ -113,7 +113,8 @@ func (rs *ReplicationServer) handleConn(conn net.Conn) {
 	for _, key := range keys {
 		if rs.cw.IsSet(key) {
 			v, _ := rs.cw.Get(key)
-			ncw.Set(key, v)
+			ver, _ := rs.cw.GetVersion(key)
+			ncw.Set(key, ver, v)
 		}
 	}
 
@@ -133,10 +134,10 @@ func (rs *ReplicationServer) GetConnections() int {
 	return rs.connections
 }
 
-func (rs *ReplicationServer) Set(key string, val interface{}) {
+func (rs *ReplicationServer) Set(key string, version int64, val interface{}) {
 	rs.cwlock.Lock()
 	defer rs.cwlock.Unlock()
-	rs.cw.Set(key, val)
+	rs.cw.Set(key, version, val)
 }
 
 func (rs *ReplicationServer) Unset(key string) {
