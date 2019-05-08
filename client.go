@@ -5,12 +5,14 @@ import (
 	"log"
 	"net"
 	"sync"
+	"time"
 )
 
 type ReplicationClient struct {
-	addr  string
-	keys  map[string]int64
-	kLock sync.RWMutex
+	addr     string
+	keys     map[string]int64
+	kLock    sync.RWMutex
+	deadLine int64
 }
 
 func NewReplicationClient(addr string) *ReplicationClient {
@@ -18,6 +20,10 @@ func NewReplicationClient(addr string) *ReplicationClient {
 	rc.addr = addr
 	rc.keys = make(map[string]int64)
 	return &rc
+}
+
+func (rc *ReplicationClient) SetDeadline(dl int64) {
+	rc.deadLine = dl
 }
 
 func (rc *ReplicationClient) dropAllKeys() {
@@ -87,6 +93,10 @@ func (rc *ReplicationClient) replicationGetKeys(keys map[string]int64) (ContentW
 	conn, err := net.Dial("tcp", rc.addr)
 	if err != nil {
 		return ContentWatcher{}, err
+	}
+
+	if rc.deadLine > 0 {
+		_ = conn.SetDeadline(time.Now().Add(time.Duration(rc.deadLine) * time.Second))
 	}
 
 	defer func() {
