@@ -4,6 +4,7 @@ import (
 	"encoding/gob"
 	"log"
 	"net"
+	"os"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -21,6 +22,8 @@ type ReplicationServer struct {
 	connections  int
 	cLock        sync.RWMutex
 	stopComplete atomic.Value
+	debugLogger  *log.Logger
+	errorLogger  *log.Logger
 }
 
 func NewReplicationServer(addr string) (*ReplicationServer, error) {
@@ -38,13 +41,15 @@ func NewReplicationServer(addr string) (*ReplicationServer, error) {
 	server.connections = 0
 	server.stopComplete.Store(false)
 	server.cwHooks = make(map[string]ReplicationHook)
+	server.debugLogger = log.New(os.Stdout, "[GOREPLICA SERVER] ", log.LstdFlags)
+	server.errorLogger = log.New(os.Stderr, "[GOREPLICA SERVER] ", log.LstdFlags)
 
 	return &server, nil
 }
 
 func (rs *ReplicationServer) Serve() {
 	go func(rs *ReplicationServer) {
-		log.Println("Replication Server started...")
+		rs.debugLogger.Println("Replication Server started...")
 		run := true
 		hasFreeAccept := false
 		var mu sync.Mutex
@@ -56,7 +61,7 @@ func (rs *ReplicationServer) Serve() {
 				close(rs.stop)
 				rs.listener.Close()
 				rs.stopComplete.Store(true)
-				log.Println("Replication Server shutdown...")
+				rs.debugLogger.Println("Replication Server shutdown...")
 			default:
 				if !hasFreeAccept && run {
 					hasFreeAccept = true
@@ -64,7 +69,7 @@ func (rs *ReplicationServer) Serve() {
 						conn, err := rs.listener.Accept()
 						*hasFreeAccept = false
 						if err != nil {
-							log.Println(err.Error())
+							rs.errorLogger.Println(err.Error())
 							return
 						}
 						rs.cLock.Lock()
@@ -72,7 +77,7 @@ func (rs *ReplicationServer) Serve() {
 						rs.cLock.Unlock()
 						err = conn.SetReadDeadline(time.Now().Add(time.Duration(3 * time.Second)))
 						if err != nil {
-							log.Println(err.Error())
+							rs.errorLogger.Println(err.Error())
 							return
 						}
 						go rs.handleConn(conn)
@@ -99,7 +104,7 @@ func (rs *ReplicationServer) handleConn(conn net.Conn) {
 	decoder := gob.NewDecoder(conn)
 	err := decoder.Decode(&keys)
 	if err != nil {
-		log.Printf("Error while read command: %s\n", err)
+		rs.errorLogger.Printf("Error while read command: %s\n", err)
 		return
 	}
 
@@ -108,7 +113,7 @@ func (rs *ReplicationServer) handleConn(conn net.Conn) {
 	if len(keys) == 1 && ok {
 		err := encoder.Encode(rs.cw)
 		if err != nil {
-			log.Println(err.Error())
+			rs.errorLogger.Println(err.Error())
 		}
 		return
 	}
@@ -135,7 +140,7 @@ func (rs *ReplicationServer) handleConn(conn net.Conn) {
 
 	err = encoder.Encode(ncw)
 	if err != nil {
-		log.Println(err.Error())
+		rs.errorLogger.Println(err.Error())
 	}
 }
 
@@ -198,4 +203,12 @@ func (rs *ReplicationServer) GracefulStop() {
 
 func (rs *ReplicationServer) RegisterType(value interface{}) {
 	gob.Register(value)
+}
+
+func (rs *ReplicationServer) SetDebugLogger(l *log.Logger) {
+	rs.debugLogger = l
+}
+
+func (rs *ReplicationServer) SetErrorLogger(l *log.Logger) {
+	rs.errorLogger = l
 }

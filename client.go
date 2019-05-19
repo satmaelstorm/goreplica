@@ -4,6 +4,7 @@ import (
 	"encoding/gob"
 	"log"
 	"net"
+	"os"
 	"sync"
 	"time"
 )
@@ -13,12 +14,16 @@ type ReplicationClient struct {
 	keys     map[string]int64
 	kLock    sync.RWMutex
 	deadLine int64
+	debugLogger *log.Logger
+	errorLogger *log.Logger
 }
 
 func NewReplicationClient(addr string) *ReplicationClient {
 	var rc ReplicationClient
 	rc.addr = addr
 	rc.keys = make(map[string]int64)
+	rc.errorLogger = log.New(os.Stderr, "[GOREPLICA CLIENT] ", log.LstdFlags)
+	rc.debugLogger = log.New(os.Stdout, "[GOREPLICA CLIENT] ", log.LstdFlags)
 	return &rc
 }
 
@@ -102,7 +107,7 @@ func (rc *ReplicationClient) replicationGetKeys(keys map[string]int64) (ContentW
 	defer func() {
 		err := conn.Close()
 		if err != nil {
-			log.Printf("Error while closing connection: %s\n", err)
+			rc.errorLogger.Printf("Error while closing connection: %s\n", err)
 		}
 	}()
 
@@ -110,7 +115,7 @@ func (rc *ReplicationClient) replicationGetKeys(keys map[string]int64) (ContentW
 	err = encoder.Encode(keys)
 
 	if err != nil {
-		log.Printf("Error while send command to server: %s\n", err)
+		rc.errorLogger.Printf("Error while send command to server: %s\n", err)
 	}
 
 	decoder := gob.NewDecoder(conn)
@@ -122,4 +127,12 @@ func (rc *ReplicationClient) replicationGetKeys(keys map[string]int64) (ContentW
 	}
 
 	return cw, nil
+}
+
+func (rc *ReplicationClient) SetDebugLogger (l *log.Logger) {
+	rc.debugLogger = l
+}
+
+func (rc *ReplicationClient) SetErrorLogger (l *log.Logger) {
+	rc.errorLogger = l
 }
