@@ -86,48 +86,6 @@ func (rs *ReplicationServer) Serve() {
 	}(rs)
 }
 
-//func (rs *ReplicationServer) oldServe() {
-//	go func(rs *ReplicationServer) {
-//		rs.debugLogger.Println("Replication Server started...")
-//		rs.run = true
-//		hasFreeAccept := false
-//		var mu sync.Mutex
-//		for rs.run {
-//			mu.Lock()
-//			select {
-//			case <-rs.stop:
-//				rs.run = false
-//				close(rs.stop)
-//				rs.listener.Close()
-//				rs.stopComplete.Store(true)
-//				rs.debugLogger.Println("Replication Server shutdown...")
-//			default:
-//				if !hasFreeAccept && rs.run {
-//					hasFreeAccept = true
-//					go func(hasFreeAccept *bool) {
-//						conn, err := rs.listener.Accept()
-//						*hasFreeAccept = false
-//						if err != nil {
-//							rs.errorLogger.Println(err.Error())
-//							return
-//						}
-//						rs.cLock.Lock()
-//						rs.connections++
-//						rs.cLock.Unlock()
-//						err = conn.SetReadDeadline(time.Now().Add(time.Duration(3 * time.Second)))
-//						if err != nil {
-//							rs.errorLogger.Println(err.Error())
-//							return
-//						}
-//						go rs.handleConn(conn)
-//					}(&hasFreeAccept)
-//				}
-//			}
-//			mu.Unlock()
-//		}
-//	}(rs)
-//}
-
 func (rs *ReplicationServer) handleConn(conn net.Conn) {
 	defer func() {
 		rs.cLock.Lock()
