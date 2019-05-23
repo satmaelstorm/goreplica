@@ -2,15 +2,17 @@ package goreplica
 
 import (
 	"encoding/gob"
+	"fmt"
 	"log"
 	"net"
 	"os"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
 )
 
-type ReplicationHook func (string, int64, ContentItem) ContentItem
+type ReplicationHook func(string, int64, ContentItem) ContentItem
 
 type ReplicationServer struct {
 	cw           ContentWatcher
@@ -24,6 +26,7 @@ type ReplicationServer struct {
 	stopComplete atomic.Value
 	debugLogger  *log.Logger
 	errorLogger  *log.Logger
+	run          atomic.Value
 }
 
 func NewReplicationServer(addr string) (*ReplicationServer, error) {
@@ -41,8 +44,9 @@ func NewReplicationServer(addr string) (*ReplicationServer, error) {
 	server.connections = 0
 	server.stopComplete.Store(false)
 	server.cwHooks = make(map[string]ReplicationHook)
-	server.debugLogger = log.New(os.Stdout, "[GOREPLICA SERVER] ", log.LstdFlags)
-	server.errorLogger = log.New(os.Stderr, "[GOREPLICA SERVER] ", log.LstdFlags)
+	server.debugLogger = log.New(os.Stdout, "[GOREPLICA SERVER DEBUG] ", log.LstdFlags)
+	server.errorLogger = log.New(os.Stderr, "[GOREPLICA SERVER ERROR] ", log.LstdFlags)
+	server.run.Store(false)
 
 	return &server, nil
 }
@@ -50,44 +54,79 @@ func NewReplicationServer(addr string) (*ReplicationServer, error) {
 func (rs *ReplicationServer) Serve() {
 	go func(rs *ReplicationServer) {
 		rs.debugLogger.Println("Replication Server started...")
-		run := true
-		hasFreeAccept := false
-		var mu sync.Mutex
-		for run {
-			mu.Lock()
-			select {
-			case <-rs.stop:
-				run = false
-				close(rs.stop)
-				rs.listener.Close()
-				rs.stopComplete.Store(true)
-				rs.debugLogger.Println("Replication Server shutdown...")
-			default:
-				if !hasFreeAccept && run {
-					hasFreeAccept = true
-					go func(hasFreeAccept *bool) {
-						conn, err := rs.listener.Accept()
-						*hasFreeAccept = false
-						if err != nil {
-							rs.errorLogger.Println(err.Error())
-							return
-						}
-						rs.cLock.Lock()
-						rs.connections++
-						rs.cLock.Unlock()
-						err = conn.SetReadDeadline(time.Now().Add(time.Duration(3 * time.Second)))
-						if err != nil {
-							rs.errorLogger.Println(err.Error())
-							return
-						}
-						go rs.handleConn(conn)
-					}(&hasFreeAccept)
+		rs.run.Store(true)
+		go func(rs *ReplicationServer) {
+			<- rs.stop
+			rs.run.Store(true)
+			rs.listener.Close()
+			rs.stopComplete.Store(true)
+			rs.debugLogger.Println("Replication Server shutdown...")
+		}(rs)
+		for rs.run.Load().(bool) {
+			conn, err := rs.listener.Accept()
+			if err != nil {
+				e := fmt.Sprintf("%s", err.Error())
+				if strings.Contains(e, "use of closed network connection") {
+					rs.debugLogger.Println(e)
+					break //уже закрыт коннекшн
 				}
+				rs.errorLogger.Println(e)
+				continue
 			}
-			mu.Unlock()
+			rs.cLock.Lock()
+			rs.connections++
+			rs.cLock.Unlock()
+			err = conn.SetReadDeadline(time.Now().Add(time.Duration(3 * time.Second)))
+			if err != nil {
+				rs.errorLogger.Println(err.Error())
+				continue
+			}
+			go rs.handleConn(conn)
 		}
 	}(rs)
 }
+
+//func (rs *ReplicationServer) oldServe() {
+//	go func(rs *ReplicationServer) {
+//		rs.debugLogger.Println("Replication Server started...")
+//		rs.run = true
+//		hasFreeAccept := false
+//		var mu sync.Mutex
+//		for rs.run {
+//			mu.Lock()
+//			select {
+//			case <-rs.stop:
+//				rs.run = false
+//				close(rs.stop)
+//				rs.listener.Close()
+//				rs.stopComplete.Store(true)
+//				rs.debugLogger.Println("Replication Server shutdown...")
+//			default:
+//				if !hasFreeAccept && rs.run {
+//					hasFreeAccept = true
+//					go func(hasFreeAccept *bool) {
+//						conn, err := rs.listener.Accept()
+//						*hasFreeAccept = false
+//						if err != nil {
+//							rs.errorLogger.Println(err.Error())
+//							return
+//						}
+//						rs.cLock.Lock()
+//						rs.connections++
+//						rs.cLock.Unlock()
+//						err = conn.SetReadDeadline(time.Now().Add(time.Duration(3 * time.Second)))
+//						if err != nil {
+//							rs.errorLogger.Println(err.Error())
+//							return
+//						}
+//						go rs.handleConn(conn)
+//					}(&hasFreeAccept)
+//				}
+//			}
+//			mu.Unlock()
+//		}
+//	}(rs)
+//}
 
 func (rs *ReplicationServer) handleConn(conn net.Conn) {
 	defer func() {
