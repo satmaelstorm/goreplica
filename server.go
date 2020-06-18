@@ -21,9 +21,8 @@ type ReplicationServer struct {
 	listener     net.Listener
 	addr         string
 	stop         chan bool
-	connections  int
-	cLock        sync.RWMutex
-	stopComplete atomic.Value
+	connections  int64
+	stopComplete chan bool
 	debugLogger  *log.Logger
 	errorLogger  *log.Logger
 	run          atomic.Value
@@ -42,7 +41,7 @@ func NewReplicationServer(addr string) (*ReplicationServer, error) {
 	server.addr = addr
 	server.stop = make(chan bool)
 	server.connections = 0
-	server.stopComplete.Store(false)
+	server.stopComplete = make(chan bool)
 	server.cwHooks = make(map[string]ReplicationHook)
 	server.debugLogger = log.New(os.Stdout, "[GOREPLICA SERVER DEBUG] ", log.LstdFlags)
 	server.errorLogger = log.New(os.Stderr, "[GOREPLICA SERVER ERROR] ", log.LstdFlags)
@@ -58,8 +57,8 @@ func (rs *ReplicationServer) Serve() {
 		go func(rs *ReplicationServer) {
 			<- rs.stop
 			rs.run.Store(true)
-			rs.listener.Close()
-			rs.stopComplete.Store(true)
+			_ = rs.listener.Close()
+			rs.stopComplete <- true
 			rs.debugLogger.Println("Replication Server shutdown...")
 		}(rs)
 		for rs.run.Load().(bool) {
@@ -73,9 +72,7 @@ func (rs *ReplicationServer) Serve() {
 				rs.errorLogger.Println(e)
 				continue
 			}
-			rs.cLock.Lock()
-			rs.connections++
-			rs.cLock.Unlock()
+			atomic.AddInt64(&rs.connections, 1)
 			err = conn.SetReadDeadline(time.Now().Add(time.Duration(3 * time.Second)))
 			if err != nil {
 				rs.errorLogger.Println(err.Error())
@@ -88,12 +85,10 @@ func (rs *ReplicationServer) Serve() {
 
 func (rs *ReplicationServer) handleConn(conn net.Conn) {
 	defer func() {
-		rs.cLock.Lock()
-		rs.connections--
-		rs.cLock.Unlock()
+		atomic.AddInt64(&rs.connections, -1)
+		_ = conn.Close()
 	}()
 
-	defer conn.Close()
 	rs.cwlock.RLock()
 	defer rs.cwlock.RUnlock()
 	keys := make(map[string]int64)
@@ -146,9 +141,7 @@ func (rs *ReplicationServer) Stop() {
 }
 
 func (rs *ReplicationServer) GetConnections() int {
-	rs.cLock.RLock()
-	defer rs.cLock.RUnlock()
-	return rs.connections
+	return int(atomic.LoadInt64(&rs.connections))
 }
 
 func (rs *ReplicationServer) Set(key string, version int64, val interface{}) {
@@ -190,9 +183,7 @@ func (rs *ReplicationServer) IsSetHook(key string) bool {
 
 func (rs *ReplicationServer) GracefulStop() {
 	rs.Stop()
-	for !rs.stopComplete.Load().(bool) {
-		time.Sleep(1)
-	}
+	<- rs.stopComplete
 	for rs.GetConnections() > 0 {
 		time.Sleep(1)
 	}
